@@ -19,6 +19,10 @@ docker-compose up --build
 
 4. "http://localhost:8080/swagger-ui.html"에 접속하면 API들 테스트 가능
 
++) 실행 및 종료 방법
+Docker Desktop에서 종료 버튼 누르면 서버 종료됩니다.
+다음에 실행할 때 Docker Desktop에서 시작 버튼 눌러서 시작 가능하고 위의 방법에서 3번 으로 하셔도 됩니다.
+
 +) 네트워크 및 보안 설정(API 연동 시 참고)
 - CORS 설정 : 현재 서버는 모든 출처에서의 요청을 허용 중
 - 안드로이드 앱에서 API 호출 시, localhost 대신 본인 컴퓨터의 사설 IP 주소를 사용해야 함
