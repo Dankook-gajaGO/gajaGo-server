@@ -20,7 +20,7 @@ public class TmapClient {
             .build();
 
     // application.properties에 정의된 API 키를 주입받음
-    @Value("${tmap.api.key}") // application.properties에 저장된 키 사용
+    @Value("${TMAP_KEY}") // application.properties에 저장된 키 사용
     private String appKey;
 
     // Tmap POI 검색 API를 호출하여 장소 후보군 리스트를 반환
