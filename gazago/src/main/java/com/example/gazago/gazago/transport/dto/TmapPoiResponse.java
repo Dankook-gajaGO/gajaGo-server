@@ -1,4 +1,3 @@
-// Tmap 에서 가져온 장소 후보 리스트 (Tamp -> Spring)
 package com.example.gazago.gazago.transport.dto;
 
 import lombok.Getter;
@@ -26,10 +25,26 @@ public class TmapPoiResponse {
     @Getter
     @NoArgsConstructor
     public static class Poi {
-        private String name;        // 장소명
-        private String noorLat;     // 위도
-        private String noorLon;     // 경도
-        private NewAddressList newAddressList; // 도로명 주소 정보
+        private String id;
+        private String name;
+        private String noorLat;
+        private String noorLon;
+        private String radius;
+        private String upperAddrName;
+        private String middleAddrName;
+        private String lowerAddrName;
+        private String detailAddrName;
+        private String firstNo;
+        private String secondNo;
+        private String roadName;
+        private String firstBuildNo;
+        private String secondBuildNo;
+        private String buildingNo1;
+        private String buildingNo2;
+        private String upperBizName;
+        private String middleBizName;
+        private String lowerBizName;
+        private NewAddressList newAddressList;
 
         @Getter
         @NoArgsConstructor
@@ -39,7 +54,7 @@ public class TmapPoiResponse {
             @Getter
             @NoArgsConstructor
             public static class NewAddress {
-                private String fullAddressRoad; // 전체 도로명 주소
+                private String fullAddressRoad;
             }
         }
     }
