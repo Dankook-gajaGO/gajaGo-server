@@ -4,16 +4,21 @@ import com.example.gazago.gazago.transport.dto.FastApiChatRequest;
 import com.example.gazago.gazago.transport.dto.LocationAnalysisResponse;
 import com.example.gazago.gazago.transport.dto.PythonSuccessResponse;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
 
 @Component
-@RequiredArgsConstructor
 public class FastApiClient {
 
-    private final WebClient webClient = WebClient.builder()
-            .baseUrl("http://python-server:8000")
-            .build();
+    private final WebClient webClient;
+
+    // 생성자 시점에 환경 변수로 주입받은 URL을 baseUrl로 설정
+    public FastApiClient(@Value("${fastapi.url}") String fastApiUrl) {
+        this.webClient = WebClient.builder()
+                .baseUrl(fastApiUrl)
+                .build();
+    }
 
     // 사용자 메시지에서 키워드 추출 요청
     public LocationAnalysisResponse analyzeText(FastApiChatRequest fastApiRequest) {

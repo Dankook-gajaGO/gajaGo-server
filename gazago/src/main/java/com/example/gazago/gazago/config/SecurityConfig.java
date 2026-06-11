@@ -30,12 +30,16 @@ public class SecurityConfig {
                 .csrf(csrf -> csrf.disable())
                 .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
+                                //.anyRequest().permitAll()
+
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .requestMatchers("/api/member/signup", "/api/member/login").permitAll()
                         .requestMatchers("/api/festival/festivalDetail", "/api/festival/festivalList").permitAll()
                         .requestMatchers("/api/facilities/**").permitAll()
                         .requestMatchers("/swagger-ui/**", "/v3/api-docs/**", "/swagger-ui.html").permitAll()
                         .anyRequest().authenticated()
+
+
                 )
                 .addFilterBefore(new JwtAuthenticationFilter(jwtTokenProvider),
                         org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter.class);
