@@ -20,6 +20,9 @@ public class MemberService {
     @Transactional
     public void signUp(SignupRequestDto requestDto) {
         // 1. 이미 존재하는 이메일/ID인지 검증
+        if (userRepository.existsByLoginId(requestDto.getLoginId())) {
+            throw new IllegalArgumentException("이미 사용 중인 아이디입니다.");
+        }
         if (userRepository.existsByEmail(requestDto.getEmail())) {
             throw new IllegalArgumentException("이미 사용 중인 이메일입니다.");
         }

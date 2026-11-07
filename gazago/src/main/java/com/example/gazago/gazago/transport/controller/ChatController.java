@@ -4,7 +4,14 @@ import com.example.gazago.gazago.transport.dto.ChatInitialRequest;
 import com.example.gazago.gazago.transport.dto.LocationCandidateResponse;
 import com.example.gazago.gazago.transport.dto.LocationSelectRequest;
 import com.example.gazago.gazago.transport.dto.RouteSelectRequest;
+import com.example.gazago.gazago.transport.dto.RouteHistoryItem;
 import com.example.gazago.gazago.transport.service.ChatService;
+import com.example.gazago.gazago.transport.service.RouteHistoryService;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -17,6 +24,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/transport")
 public class ChatController {
     private final ChatService chatService;
+    private final RouteHistoryService routeHistoryService;
 
     // 리액트에서 사용자의 최초 메시지를 받아서 후보군을 전달하는 API
     @PostMapping("/InitialRequest")
@@ -32,5 +40,22 @@ public class ChatController {
 
         // 2단계: 추천 경로 조회
         return chatService.getRecommendedRoutes(request.getRequestId());
+    }
+
+    // 회원별 최근 교통 경로 기록 (최근 5개)
+    @GetMapping("/history")
+    public List<RouteHistoryItem> getHistory(@AuthenticationPrincipal String loginId) {
+        return routeHistoryService.getRecent(loginId);
+    }
+
+    @PostMapping("/history")
+    public List<RouteHistoryItem> saveHistory(@RequestBody RouteHistoryItem item, @AuthenticationPrincipal String loginId) {
+        return routeHistoryService.save(loginId, item);
+    }
+
+    @DeleteMapping("/history")
+    public ResponseEntity<Void> clearHistory(@AuthenticationPrincipal String loginId) {
+        routeHistoryService.clear(loginId);
+        return ResponseEntity.noContent().build();
     }
 }

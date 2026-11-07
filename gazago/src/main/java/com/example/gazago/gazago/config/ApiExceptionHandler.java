@@ -16,4 +16,10 @@ public class ApiExceptionHandler {
         String message = e.getReason() != null ? e.getReason() : "요청을 처리하지 못했습니다.";
         return ResponseEntity.status(e.getStatusCode()).body(Map.of("message", message));
     }
+
+    // 서비스 코드가 사용자용 문구로 던지는 검증 실패 (예: "아이디 또는 비밀번호가 잘못되었습니다.")
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity<Map<String, String>> handle(IllegalArgumentException e) {
+        return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
+    }
 }

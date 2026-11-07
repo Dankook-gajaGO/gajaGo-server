@@ -4,6 +4,7 @@ package com.example.gazago.gazago.transport.dto;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
+import lombok.NoArgsConstructor;
 
 import java.util.List;
 
@@ -16,6 +17,7 @@ public class LocationCandidateResponse {
     private List<LocationInfo> destinationcandidates; //목적지 장소 정보들을 담은 리스트
 
     @Getter
+    @NoArgsConstructor
     @AllArgsConstructor
     public static class LocationInfo {
         private String name; //장소명
