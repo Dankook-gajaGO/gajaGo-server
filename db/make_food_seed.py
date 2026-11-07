@@ -6,6 +6,7 @@ from pathlib import Path
 HERE = Path(__file__).parent
 
 # 카테고리 이름은 앱이 보내는 값(selectedAllergies)과 같아야 필터가 동작함
+# 기본 목록은 팀 Notion 표. 아래 EXTRA 는 안전을 위한 보수적 추가(제품마다 다르지만 흔히 들어가는 성분)
 ALLERGY = {
     "난류": ["계란", "계란흰자", "계란노른자"],
     "우유": ["우유", "버터", "생크림", "모짜렐라치즈"],
@@ -21,6 +22,18 @@ ALLERGY = {
 }
 
 
+EXTRA = {
+    "밀": ["간장", "국간장", "진간장", "[쇠고기양념] 간장", "[불고기양념] 간장", "[비빔양념] 간장",  # 양조간장은 보통 밀 포함
+           "고추장", "된장", "쌈장", "어묵", "두반장", "굴소스", "카레", "양념장"],
+    "메밀": ["냉면"],  # 냉면 면은 보통 메밀+밀
+    "우유": ["카레"],  # 카레 루에 유제품이 흔함
+    "대두": ["고추장", "쌈장", "인절미", "굴소스", "양념장"],  # 메줏가루·콩고물·간장 베이스
+    "해산물": ["다시물"],  # 다시물은 보통 멸치 육수
+}
+for cat, names in EXTRA.items():
+    ALLERGY[cat] = ALLERGY[cat] + [n for n in names if n not in ALLERGY[cat]]
+
+
 def q(s):
     return "'" + s.replace("\\", "\\\\").replace("'", "''") + "'"
 
@@ -34,9 +47,11 @@ for r in rows:
             ingredients.append(f"({int(r['food_id'])},{q(name)})")
 mapping = [f"({q(cat)},{q(name)})" for cat, names in ALLERGY.items() for name in names]
 
-# self-check: Notion 표 기준 총 101개 재료, CSV 음식 99개
-assert len(mapping) == 101, len(mapping)
+# self-check: CSV 음식 99개, 모든 알러지 항목이 최소 1개 음식을 실제로 걸러야 함 (메밀처럼 아무것도 안 걸러지는 필터 방지)
 assert len(foods) == 99, len(foods)
+all_ingredients = {x.strip() for r in rows for x in r["ingredient_nm"].split(",")}
+dead = [cat for cat, names in ALLERGY.items() if not all_ingredients & set(names)]
+assert not dead, f"아무 음식도 거르지 못하는 알러지: {dead}"
 
 SEP = ",\n"
 sql = f"""-- 자동 생성 파일: db/make_food_seed.py 로 다시 만들 것 (직접 수정 금지)
