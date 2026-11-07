@@ -58,6 +58,8 @@ services:
       SPRING_DATASOURCE_PASSWORD: ${DB_PASSWORD}
       SPRING_JPA_HIBERNATE_DDL_AUTO: update
       FASTAPI_URL: http://python-server:8000
+      # t3.small(메모리 2GB)에서 MySQL·챗봇과 같이 돌도록 JVM 힙 상한
+      JAVA_TOOL_OPTIONS: -Xmx512m
       TZ: Asia/Seoul
     depends_on:
       mysql:
