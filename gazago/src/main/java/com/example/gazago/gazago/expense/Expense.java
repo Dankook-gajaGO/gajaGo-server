@@ -34,7 +34,8 @@ public class Expense {
 
     private String category;
 
-    public void update(String title, Long amount, String category) {
+    public void update(LocalDate spentOn, String title, Long amount, String category) {
+        if (spentOn != null) this.spentOn = spentOn;
         this.title = title;
         this.amount = amount;
         this.category = category;

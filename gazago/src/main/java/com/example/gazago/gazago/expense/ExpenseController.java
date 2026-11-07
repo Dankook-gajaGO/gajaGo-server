@@ -54,7 +54,7 @@ public class ExpenseController {
     public ExpenseItem update(@PathVariable Long id, @RequestBody ExpenseItem req, @AuthenticationPrincipal String loginId) {
         validate(req);
         Expense expense = owned(id, loginId);
-        expense.update(req.title().trim(), req.amount(), CATEGORIES.contains(req.category()) ? req.category() : "기타");
+        expense.update(req.spentOn(), req.title().trim(), req.amount(), CATEGORIES.contains(req.category()) ? req.category() : "기타");
         return ExpenseItem.from(expense);
     }
 
