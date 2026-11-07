@@ -21,8 +21,7 @@ public class ChatController {
     // 리액트에서 사용자의 최초 메시지를 받아서 후보군을 전달하는 API
     @PostMapping("/InitialRequest")
     public LocationCandidateResponse initialMessage(@RequestBody ChatInitialRequest message, @AuthenticationPrincipal String loginId) {
-        System.out.println("LOGIN_ID = " + loginId);
-        return chatService.processInitialMessage(message.getMessage(), loginId);
+        return chatService.processInitialMessage(message, loginId);
     }
 
     // 사용자가 고른 장소를 받아서 경로를 제공하는 API

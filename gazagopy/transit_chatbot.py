@@ -37,7 +37,7 @@ def extract_userinput_info(user_input: str):
     당신은 교통 정보 추출 전문가입니다. 사용자의 문장에서 다음 정보를 추출하여 JSON 형식으로만 응답하세요.
     
     [추출 대상]
-    1. departure: 출발지 (명확한 장소명, 모르면 "unknown")
+    1. departure: 출발지 (명확한 장소명. "여기", "내 위치", "지금 있는 곳"처럼 현재 위치를 뜻하면 "현재 위치", 출발지를 말하지 않았으면 "unknown")
     2. destination: 목적지 (명확한 장소명, 모르면 "unknown")
     3. constraints: 주의사항 (짐, 인원, 환승, 선호 수단, 장애 여부, 교통 약자 등 특이사항을 요약하여 기록, 없으면 "none")
 

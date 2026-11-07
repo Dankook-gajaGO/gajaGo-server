@@ -35,5 +35,7 @@ CREATE TABLE IF NOT EXISTS festival_info (
   tel            VARCHAR(255),
   fee            TEXT,
   eventhomepage  TEXT,
-  overview       TEXT
+  overview       TEXT,
+  lat            DOUBLE,
+  lng            DOUBLE
 );
