@@ -86,6 +86,36 @@ public class TmapClient {
     }
 
     // Tmap 응답 내의 계층 구조를 안전하게 접근하여 POI 리스트 추출
+    // 업종 분류로는 안 잡히는 시설(환전소)용: 키워드 + 거리순 검색 후 이름에 키워드가 있는 곳만
+    public List<FacilityNearbyResponse.FacilityInfo> searchNearbyByKeyword(
+            String keyword, String label, double lat, double lng, int radius, int offset, int size
+    ) {
+        TmapPoiResponse response = webClient.get()
+                .uri(uriBuilder -> uriBuilder
+                        .path("/tmap/pois")
+                        .queryParam("version", 1)
+                        .queryParam("searchKeyword", keyword)
+                        .queryParam("centerLat", lat)
+                        .queryParam("centerLon", lng)
+                        .queryParam("radius", radius)
+                        .queryParam("searchtypCd", "R")
+                        .queryParam("page", (offset / size) + 1)
+                        .queryParam("count", size)
+                        .queryParam("reqCoordType", "WGS84GEO")
+                        .queryParam("resCoordType", "WGS84GEO")
+                        .queryParam("appKey", appKey)
+                        .build())
+                .retrieve()
+                .bodyToMono(TmapPoiResponse.class)
+                .block();
+
+        return readPois(response).stream()
+                .filter(poi -> poi.getName() != null && poi.getName().contains(keyword))
+                .map(poi -> toFacilityInfo(poi, lat, lng, List.of(label)))
+                .filter(Objects::nonNull)
+                .collect(Collectors.toList());
+    }
+
     private List<TmapPoiResponse.Poi> readPois(TmapPoiResponse response) {
         if (response == null || response.getSearchPoiInfo() == null
                 || response.getSearchPoiInfo().getPois() == null
@@ -189,6 +219,9 @@ public class TmapClient {
                 safeText(poi.getName(), "")
         ).toLowerCase(Locale.ROOT);
 
+        if (categoryText.contains("환전")) return "환전소";
+        if (categoryText.contains("약국")) return "약국";
+        if (categoryText.contains("역[") || categoryText.contains("지하철") || categoryText.contains("전철역")) return "지하철역";
         if (categoryText.contains("atm") || categoryText.contains("cd기")) return "ATM";
         if (categoryText.contains("화장실") || categoryText.contains("toilet")) return "화장실";
         if (categoryText.contains("편의점")
