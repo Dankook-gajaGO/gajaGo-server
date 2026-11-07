@@ -37,8 +37,7 @@ public class ExpenseController {
 
     @PostMapping
     public ExpenseItem add(@RequestBody ExpenseItem req, @AuthenticationPrincipal String loginId) {
-        if (req.title() == null || req.title().isBlank()) throw new IllegalArgumentException("내용을 입력해주세요.");
-        if (req.amount() == null || req.amount() <= 0) throw new IllegalArgumentException("금액은 0보다 커야 합니다.");
+        validate(req);
         String category = CATEGORIES.contains(req.category()) ? req.category() : "기타";
         Expense saved = expenseRepository.save(Expense.builder()
                 .user(member(loginId))
@@ -50,15 +49,33 @@ public class ExpenseController {
         return ExpenseItem.from(saved);
     }
 
+    // 세부 내용(예: 00음식점)·금액·분류 수정
+    @PutMapping("/{id}")
+    public ExpenseItem update(@PathVariable Long id, @RequestBody ExpenseItem req, @AuthenticationPrincipal String loginId) {
+        validate(req);
+        Expense expense = owned(id, loginId);
+        expense.update(req.title().trim(), req.amount(), CATEGORIES.contains(req.category()) ? req.category() : "기타");
+        return ExpenseItem.from(expense);
+    }
+
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> delete(@PathVariable Long id, @AuthenticationPrincipal String loginId) {
+        expenseRepository.delete(owned(id, loginId));
+        return ResponseEntity.noContent().build();
+    }
+
+    private void validate(ExpenseItem req) {
+        if (req.title() == null || req.title().isBlank()) throw new IllegalArgumentException("내용을 입력해주세요.");
+        if (req.amount() == null || req.amount() <= 0) throw new IllegalArgumentException("금액은 0보다 커야 합니다.");
+    }
+
+    private Expense owned(Long id, String loginId) {
         Expense expense = expenseRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "지출을 찾을 수 없습니다."));
         if (!expense.getUser().getLoginId().equals(loginId)) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "다른 사용자의 지출입니다.");
         }
-        expenseRepository.delete(expense);
-        return ResponseEntity.noContent().build();
+        return expense;
     }
 
     private User member(String loginId) {
