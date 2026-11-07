@@ -19,7 +19,7 @@ app = FastAPI()
 
 # 클라이언트 설정 (gemini). 모델이 종료되면 .env 의 GEMINI_MODEL 만 바꾸면 됨
 client = genai.Client()
-GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.5-flash")
 
 # DB 연결 
 # 비밀번호에 # ! @ 같은 문자가 있어도 URL이 깨지지 않게 인코딩
