@@ -17,9 +17,25 @@ load_dotenv()
 
 app = FastAPI()
 
-# 클라이언트 설정 (gemini). 모델이 종료되면 .env 의 GEMINI_MODEL 만 바꾸면 됨
+# 클라이언트 설정 (gemini). 쉼표로 여러 모델을 적으면 앞 모델이 한도 초과(429)·혼잡(503)일 때 다음 모델로 재시도
+# shortcut: 무료 한도는 모델별 하루 20회 수준 -> 실사용자가 늘면 Google AI Studio 결제 연결
 client = genai.Client()
-GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.5-flash")
+GEMINI_MODELS = [m.strip() for m in os.getenv(
+    "GEMINI_MODELS", os.getenv("GEMINI_MODEL", "gemini-3.5-flash,gemini-3.5-flash-lite,gemini-3.1-flash-lite")
+).split(",") if m.strip()]
+
+
+def generate(prompt):
+    last_error = None
+    for model in GEMINI_MODELS:
+        try:
+            return client.models.generate_content(model=model, contents=prompt)
+        except Exception as e:  # 한도·혼잡이면 다음 모델, 그 외 오류는 바로 실패
+            last_error = e
+            if not any(code in str(e) for code in ("429", "503", "RESOURCE_EXHAUSTED", "UNAVAILABLE")):
+                raise
+            print(f"Gemini {model} 사용 불가, 다음 모델 시도: {str(e)[:80]}", flush=True)
+    raise last_error
 
 # DB 연결 
 # 비밀번호에 # ! @ 같은 문자가 있어도 URL이 깨지지 않게 인코딩
@@ -59,10 +75,7 @@ def extract_userinput_info(user_input: str):
 
     try:
         # gemini api 호출 
-        response = client.models.generate_content(
-            model = GEMINI_MODEL,
-            contents = prompt
-        )
+        response = generate(prompt)
 
     
         raw_text = response.text.strip()
@@ -117,10 +130,7 @@ def get_ai_recommendation(constraints: str, _3routes_summary: list):
     """
     try:
         # gemini 호출
-        response = client.models.generate_content(
-            model = GEMINI_MODEL,
-            contents = prompt
-        )        
+        response = generate(prompt)        
         
         clean_json = response.text.replace("```json", "").replace("```", "").strip()
         return json.loads(clean_json) 
