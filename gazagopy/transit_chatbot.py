@@ -17,8 +17,9 @@ load_dotenv()
 
 app = FastAPI()
 
-# 클라이언트 설정 (gemini)
+# 클라이언트 설정 (gemini). 모델이 종료되면 .env 의 GEMINI_MODEL 만 바꾸면 됨
 client = genai.Client()
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
 
 # DB 연결 
 # 비밀번호에 # ! @ 같은 문자가 있어도 URL이 깨지지 않게 인코딩
@@ -59,7 +60,7 @@ def extract_userinput_info(user_input: str):
     try:
         # gemini api 호출 
         response = client.models.generate_content(
-            model = "gemini-2.5-flash",
+            model = GEMINI_MODEL,
             contents = prompt
         )
 
@@ -117,7 +118,7 @@ def get_ai_recommendation(constraints: str, _3routes_summary: list):
     try:
         # gemini 호출
         response = client.models.generate_content(
-            model = "gemini-2.5-flash",
+            model = GEMINI_MODEL,
             contents = prompt
         )        
         
@@ -152,7 +153,7 @@ def request_tmap_route(start_x, start_y, end_x, end_y):
     }
 
     try: 
-        response = requests.post(url, json=payload, headers=headers)
+        response = requests.post(url, json=payload, headers=headers, timeout=20)
         
         if response.status_code == 200:
             return response.json()
@@ -270,7 +271,9 @@ def generate_route_recommendations(request_id: int):
 
     
     # 모든 결과(총 소요시간, 총 환승횟수, 도보 거리, 총 요금, 추천사유, 우선순위, 세부경로)를 DB에 저장
-    with engine.begin() as conn:  
+    with engine.begin() as conn:
+        # 같은 요청에서 장소를 다시 고르면 다시 호출됨 -> 이전 경로를 지워야 새 경로 3개만 보임
+        conn.execute(text("DELETE FROM route_summary WHERE request_id = :rid"), {"rid": request_id})
         for i, s in enumerate(summaries):
             
             recommendation = next((item for item in ai_recommendations if item.get('path_id') == i+1), None)
