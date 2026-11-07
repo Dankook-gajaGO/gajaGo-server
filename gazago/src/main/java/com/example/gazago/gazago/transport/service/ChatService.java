@@ -32,15 +32,7 @@ public class ChatService {
     public LocationCandidateResponse processInitialMessage(String userMessage, String loginId) {
         // 1. 유저 조회
         User user = userRepository.findByLoginId(loginId)
-                .orElseThrow(() -> {
-                    List<User> allUsers = userRepository.findAll();
-                    log.error("--- 디버깅 시작 ---");
-                    for (User u : allUsers) {
-                        log.error("DB에 저장된 유저: '{}' (길이: {})", u.getLoginId(), u.getLoginId().length());
-                    }
-                    log.error("--- 요청받은 ID: '{}' (길이: {}) ---", loginId, loginId.length());
-                    return new EntityNotFoundException("사용자를 찾을 수 없습니다: " + loginId);
-                });
+                .orElseThrow(() -> new EntityNotFoundException("사용자를 찾을 수 없습니다: " + loginId));
 
         // 2. FastAPI 호출: 자연어 분석 (출발지/목적지 키워드, 주의사항 추출)
         FastApiChatRequest fastApiRequest = new FastApiChatRequest(userMessage);
