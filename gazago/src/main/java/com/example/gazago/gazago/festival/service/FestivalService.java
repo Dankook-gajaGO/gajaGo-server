@@ -26,7 +26,8 @@ public class FestivalService {
         LocalDate targetDate = now.plusMonths(months); //오늘 + N달
 
         // 조회 범위 : 지금 ~ N달 뒤
-        List<FestivalInfo> festivals = festivalInfoRepository.findByEventStartDateBetween(now, targetDate);
+        List<FestivalInfo> festivals =
+                festivalInfoRepository.findByEventStartDateLessThanEqualAndEventEndDateGreaterThanEqual(targetDate, now);
 
         List<FestivalListResponse.FestivalSummary> summaries = festivals.stream()
                 .map(f -> new FestivalListResponse.FestivalSummary(
