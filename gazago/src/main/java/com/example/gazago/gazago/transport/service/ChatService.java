@@ -36,8 +36,8 @@ public class ChatService {
         Double lat = req.getLat(), lng = req.getLng();
         boolean knownDestination = req.getDestLat() != null && req.getDestLng() != null;
 
-        // 1. 유저 조회
-        User user = userRepository.findByLoginId(loginId)
+        // 1. 유저 조회 (비회원이면 null: 길찾기는 누구나, 기록 저장은 회원만)
+        User user = loginId == null ? null : userRepository.findByLoginId(loginId)
                 .orElseThrow(() -> new EntityNotFoundException("사용자를 찾을 수 없습니다: " + loginId));
 
         // 2. FastAPI 호출: 자연어 분석 (출발지/목적지 키워드, 주의사항 추출)
@@ -67,8 +67,6 @@ public class ChatService {
                 departure,
                 pythonResponse.getConstraints());
 
-        userRequest.setUser(user);
-        user.addRequest(userRequest);
 
         UserRequest savedRequest = chatRepository.save(userRequest);
 
@@ -91,9 +89,13 @@ public class ChatService {
 
     // 사용자가 리스트 중 최종 장소를 선택했을 때 호출되는 메서드
     @Transactional
-    public void updateRequestCoordinates(LocationSelectRequest request) {
+    public void updateRequestCoordinates(LocationSelectRequest request, String loginId) {
         UserRequest userRequest = chatRepository.findById(request.getRequestId())
                 .orElseThrow(() -> new EntityNotFoundException("요청을 찾을 수 없습니다."));
+        // 회원의 요청은 본인만 이어서 사용 (요청 번호만 알면 남의 기록을 바꾸거나 보던 문제 방지)
+        if (userRequest.getUser() != null && !userRequest.getUser().getLoginId().equals(loginId)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "다른 사용자의 요청입니다.");
+        }
 
         userRequest.updateCoordinates(
                 request.getSelectedDeparture().getName(),
