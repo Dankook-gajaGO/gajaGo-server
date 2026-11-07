@@ -26,7 +26,7 @@ public class FestivalInfo {
     private String addr;
 
     @Column(name="zipcode")
-    private int zipCode;
+    private Integer zipCode;
 
     @Column(name="eventstartdate")
     private LocalDate eventStartDate;
@@ -34,18 +34,19 @@ public class FestivalInfo {
     @Column(name="eventenddate")
     private LocalDate eventEndDate;
 
-    @Column(name="image")
+    // TourAPI 값은 255자를 넘는 경우가 많아 길이를 명시 (ddl-auto=update 가 DB 컬럼을 이 정의로 맞춤)
+    @Column(name="image", length = 500)
     private String image;
 
     @Column(name="tel")
     private String tel;
 
-    @Column(name="fee")
+    @Column(name="fee", columnDefinition = "TEXT")
     private String fee;
 
-    @Column(name="eventhomepage")
+    @Column(name="eventhomepage", columnDefinition = "TEXT")
     private String eventHomepage;
 
-    @Column(name="overview")
+    @Column(name="overview", columnDefinition = "TEXT")
     private String overview;
 }

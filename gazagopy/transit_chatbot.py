@@ -9,6 +9,7 @@ from google import genai
 from dotenv import load_dotenv
 import uvicorn 
 from datetime import datetime
+from urllib.parse import quote_plus
 
 # 환경 변수 로드 
 # GEMINI_API_KEY, TMAP_KEY, SQLALCHEMY_DATABASE_URL(DB연결) : .env 파일에 저장 필요
@@ -20,7 +21,8 @@ app = FastAPI()
 client = genai.Client()
 
 # DB 연결 
-DB_URL = f"mysql+pymysql://{os.getenv('DB_USER')}:{os.getenv('DB_PASSWORD')}@{os.getenv('DB_HOST')}:{os.getenv('DB_PORT')}/{os.getenv('DB_NAME')}"
+# 비밀번호에 # ! @ 같은 문자가 있어도 URL이 깨지지 않게 인코딩
+DB_URL = f"mysql+pymysql://{os.getenv('DB_USER')}:{quote_plus(os.getenv('DB_PASSWORD', ''))}@{os.getenv('DB_HOST')}:{os.getenv('DB_PORT', '3306')}/{os.getenv('DB_NAME')}?charset=utf8mb4"
 engine = create_engine(DB_URL) 
 
 class UserRequest(BaseModel):

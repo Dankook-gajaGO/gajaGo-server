@@ -17,7 +17,8 @@ public class JwtTokenProvider {
     private String secretKey;
 
     private Key key;
-    private final long tokenValidTime = 30 * 60 * 1000L; // 30분
+    // shortcut: 리프레시 토큰 없이 7일 유지, 로그아웃 강제/탈취 대응이 필요해지면 리프레시 토큰 도입
+    private final long tokenValidTime = 7 * 24 * 60 * 60 * 1000L; // 7일
 
     @PostConstruct
     protected void init() {
