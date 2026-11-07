@@ -47,7 +47,8 @@ public class FestivalService {
         return new FestivalDetailResponse(
                 info.getContentId(), info.getTitle(), info.getAddr(), info.getZipCode(),
                 info.getEventStartDate(), info.getEventEndDate(), info.getImage(),
-                info.getTel(), info.getFee(), info.getEventHomepage(), info.getOverview()
+                info.getTel(), info.getFee(), info.getEventHomepage(), info.getOverview(),
+                info.getLat(), info.getLng()
         );
 
     }

@@ -21,4 +21,6 @@ public class FestivalDetailResponse {
     private String fee;
     private String eventHomepage;
     private String overview;
+    private Double lat;
+    private Double lng;
 }

@@ -19,12 +19,13 @@ RUN_HOUR = 4
 
 UPSERT = text("""
 INSERT INTO festival_info (contentid, title, addr1, zipcode, eventstartdate, eventenddate,
-                           image, tel, fee, eventhomepage, overview)
+                           image, tel, fee, eventhomepage, overview, lat, lng)
 VALUES (:contentid, :title, :addr1, :zipcode, :eventstartdate, :eventenddate,
-        :image, :tel, :fee, :eventhomepage, :overview)
+        :image, :tel, :fee, :eventhomepage, :overview, :lat, :lng)
 ON DUPLICATE KEY UPDATE title=VALUES(title), addr1=VALUES(addr1), zipcode=VALUES(zipcode),
   eventstartdate=VALUES(eventstartdate), eventenddate=VALUES(eventenddate), image=VALUES(image),
-  tel=VALUES(tel), fee=VALUES(fee), eventhomepage=VALUES(eventhomepage), overview=VALUES(overview)
+  tel=VALUES(tel), fee=VALUES(fee), eventhomepage=VALUES(eventhomepage), overview=VALUES(overview),
+  lat=VALUES(lat), lng=VALUES(lng)
 """)
 
 
@@ -36,8 +37,16 @@ def to_int(s):
     return int(s) if s and s.isdigit() else None
 
 
+def to_float(s):
+    try:
+        return float(s) if s else None
+    except ValueError:
+        return None
+
+
 assert to_date("20261119") == date(2026, 11, 19) and to_date("") is None and to_date("2026") is None
 assert to_int("06234") == 6234 and to_int("") is None and to_int("12-3") is None
+assert to_float("126.97") == 126.97 and to_float("") is None and to_float("x") is None
 
 
 def call(op, **params):
@@ -84,6 +93,8 @@ def collect():
             "fee": intro.get("usetimefestival") or None,
             "eventhomepage": intro.get("eventhomepage") or common.get("homepage") or None,
             "overview": common.get("overview") or None,
+            "lat": to_float(f.get("mapy")),  # TourAPI: mapy=위도, mapx=경도
+            "lng": to_float(f.get("mapx")),
         })
 
     if rows:

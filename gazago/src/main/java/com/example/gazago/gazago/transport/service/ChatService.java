@@ -32,13 +32,16 @@ public class ChatService {
 
     // 사용자의 첫 메시지를 처리하는 메서드
     @Transactional
-    public LocationCandidateResponse processInitialMessage(String userMessage, String loginId) {
+    public LocationCandidateResponse processInitialMessage(ChatInitialRequest req, String loginId) {
+        Double lat = req.getLat(), lng = req.getLng();
+        boolean knownDestination = req.getDestLat() != null && req.getDestLng() != null;
+
         // 1. 유저 조회
         User user = userRepository.findByLoginId(loginId)
                 .orElseThrow(() -> new EntityNotFoundException("사용자를 찾을 수 없습니다: " + loginId));
 
         // 2. FastAPI 호출: 자연어 분석 (출발지/목적지 키워드, 주의사항 추출)
-        FastApiChatRequest fastApiRequest = new FastApiChatRequest(userMessage);
+        FastApiChatRequest fastApiRequest = new FastApiChatRequest(req.getMessage());
         LocationAnalysisResponse pythonResponse;
         try {
             pythonResponse = fastApiClient.analyzeText(fastApiRequest);
@@ -46,15 +49,22 @@ public class ChatService {
             log.warn("챗봇 분석 서버 호출 실패: {}", e.getMessage());
             throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "AI 분석이 잠시 안 됩니다. 잠시 후 다시 시도해주세요.");
         }
-        if (pythonResponse == null || isUnknownPlace(pythonResponse.getDeparture()) || isUnknownPlace(pythonResponse.getDestination())) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "출발지와 도착지를 함께 알려주세요. 예: 서울역에서 경복궁까지 어떻게 가?");
+        if (pythonResponse == null || (!knownDestination && isUnknownPlace(pythonResponse.getDestination()))) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "어디로 가고 싶은지 알려주세요. 예: 서울역에서 경복궁까지 어떻게 가?");
         }
+        // 출발지를 말하지 않았거나 "현재 위치"면 기기 위치를 출발지로 사용
+        boolean fromHere = isUnknownPlace(pythonResponse.getDeparture()) || CURRENT_LOCATION.equals(pythonResponse.getDeparture().trim());
+        if (fromHere && (lat == null || lng == null)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "출발지를 함께 알려주시거나, 위치 권한을 허용해주세요.");
+        }
+        String departure = fromHere ? CURRENT_LOCATION : pythonResponse.getDeparture();
+        String destination = knownDestination && req.getDestName() != null ? req.getDestName() : pythonResponse.getDestination();
 
         //2. DB 저장
         UserRequest userRequest = UserRequest.createInitialRequest(
                 user,
-                pythonResponse.getDestination(),
-                pythonResponse.getDeparture(),
+                destination,
+                departure,
                 pythonResponse.getConstraints());
 
         userRequest.setUser(user);
@@ -63,8 +73,13 @@ public class ChatService {
         UserRequest savedRequest = chatRepository.save(userRequest);
 
         // 3. Tmap 호출: 추출된 키워드로 실제 장소들 검색
-        var departurecan = tmapClient.searchPois(pythonResponse.getDeparture());
-        var destinationcan = tmapClient.searchPois(pythonResponse.getDestination());
+        var departurecan = fromHere
+                ? List.of(new LocationCandidateResponse.LocationInfo(CURRENT_LOCATION, "내 위치", lat, lng))
+                : tmapClient.searchPois(departure);
+        var destinationcan = knownDestination
+                ? List.of(new LocationCandidateResponse.LocationInfo(destination,
+                        req.getDestAddress() != null ? req.getDestAddress() : "", req.getDestLat(), req.getDestLng()))
+                : tmapClient.searchPois(destination);
 
         // 4. 응답 DTO 조립 : 리액트가 화면에 후보를 띄울 수 있도록 가공하여 반환
         return LocationCandidateResponse.builder()
@@ -107,6 +122,8 @@ public class ChatService {
                 .routes(savedRoutes.stream().map(RouteSelectRequest.RouteInfo::from).toList())
                 .build();
     }
+
+    private static final String CURRENT_LOCATION = "현재 위치";
 
     // Gemini 는 장소를 못 찾으면 "unknown" 을 돌려줌 (프롬프트 규칙)
     private boolean isUnknownPlace(String place) {

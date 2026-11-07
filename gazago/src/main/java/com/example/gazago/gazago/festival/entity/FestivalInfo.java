@@ -49,4 +49,11 @@ public class FestivalInfo {
 
     @Column(name="overview", columnDefinition = "TEXT")
     private String overview;
+
+    // TourAPI mapx(경도)/mapy(위도). 길찾기 도착지로 사용
+    @Column(name="lat")
+    private Double lat;
+
+    @Column(name="lng")
+    private Double lng;
 }
