@@ -239,8 +239,10 @@ def extract_route_summary(request_result, request_id):
 def get_info(request: UserRequest):
     result = extract_userinput_info(request.user_input)
 
-    if not result:
-        raise HTTPException(status_code=500, detail="오류 발생")
+    # Gemini 호출/JSON 파싱 실패를 200으로 돌려주면 Spring 이 빈 장소로 진행함 -> 오류 코드로 알림
+    if not result or result.get("status") == "fail":
+        print(f"Gemini 추출 실패: {result}", flush=True)
+        raise HTTPException(status_code=502, detail="AI 분석 실패")
 
     return result
 
