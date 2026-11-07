@@ -33,4 +33,10 @@ public class Expense {
     private Long amount;
 
     private String category;
+
+    public void update(String title, Long amount, String category) {
+        this.title = title;
+        this.amount = amount;
+        this.category = category;
+    }
 }
