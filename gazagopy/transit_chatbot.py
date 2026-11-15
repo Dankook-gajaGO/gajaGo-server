@@ -278,28 +278,31 @@ def extract_kakao_summary(request_result, request_id):
         routes = []
         for route in request_result.get("routes", [])[:3]:
             props = route["properties"]
-            detail_list, walking_distance = [], 0
-            for step in route.get("steps", []):
-                sp = step["properties"]
-                minutes = max(1, sp.get("time", 0) // 60)
-                n = len(detail_list) + 1
-                if sp.get("type") == "WALKING":
-                    walking_distance += sp.get("distance", 0)
-                    detail_list.append(f"{n}. 도보: {sp.get('guidance', '걷기')} (약 {minutes}분, {sp.get('distance', 0)}m)")
-                else:
-                    stops = sp.get("stops", [])
-                    route_name = "/".join(v.get("name", "") for v in sp.get("vehicles", [])) or "대중교통"
-                    start_name = stops[0]["name"] if stops else ""
-                    end_name = stops[-1]["name"] if stops else ""
-                    detail_list.append(
-                        f"{n}. {sp.get('type')}: '{route_name}' 탑승 ('{start_name}' 승차) -> "
-                        f"'{end_name}'까지 {max(len(stops) - 1, 0)}개 정류장 이동 (약 {minutes}분)"
-                    )
+            # 카카오 응답에는 버스·지하철 구간만 오고 도보 구간은 없음 -> 정류장 사이를 도보로 채우고, 도보 거리는 전체에서 탑승 구간을 뺀 값
+            legs = [step["properties"] for step in route.get("steps", [])]
+            detail_list, prev_end = [], None
+            for sp in legs:
+                stops = sp.get("stops", [])
+                start_name = stops[0]["name"] if stops else ""
+                end_name = stops[-1]["name"] if stops else ""
+                if prev_end is None:
+                    detail_list.append(f"{len(detail_list) + 1}. 도보: 출발지에서 '{start_name}'까지 이동")
+                elif prev_end != start_name:
+                    detail_list.append(f"{len(detail_list) + 1}. 도보: '{prev_end}'에서 '{start_name}'(으)로 환승 이동")
+                route_name = "/".join(v.get("name", "") for v in sp.get("vehicles", [])) or "대중교통"
+                detail_list.append(
+                    f"{len(detail_list) + 1}. {sp.get('type')}: '{route_name}' 탑승 ('{start_name}' 승차) -> "
+                    f"'{end_name}'까지 {max(len(stops) - 1, 0)}개 정류장 이동 (약 {max(1, sp.get('time', 0) // 60)}분)"
+                )
+                prev_end = end_name
+            if prev_end is not None:
+                detail_list.append(f"{len(detail_list) + 1}. 도보: '{prev_end}'에서 도착지까지 이동")
+            riding = sum(sp.get("distance", 0) for sp in legs)
             routes.append({
                 "request_id": request_id,
                 "travel_time": props.get("totalTime", 0) // 60,
                 "transfers": props.get("transfers", 0),
-                "walking_distance": walking_distance,
+                "walking_distance": max(0, props.get("totalDistance", 0) - riding),
                 "fare": props.get("fare", {}).get("value", 0),
                 "detail": "\n".join(detail_list),
             })
