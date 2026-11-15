@@ -57,6 +57,9 @@ Gemini API / Tmap API
 - 데이터 수집 및 DB 저장
 - 조건별 조회 기능 제공
 
+## API 명세
+전체 엔드포인트와 처음 기획 대비 변경점: [docs/API.md](docs/API.md)
+
 ## 서버 실행 방법
 서버 1대에서 `docker compose` 로 4개 컨테이너가 함께 실행됩니다.
 

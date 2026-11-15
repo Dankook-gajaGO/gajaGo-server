@@ -1,7 +1,15 @@
 # 서버 1대에서 MySQL + 챗봇(FastAPI) + Spring 을 함께 실행. 실행: docker compose up -d --build
 # 외부에는 Spring(8080)만 열고, MySQL·FastAPI는 내부 네트워크에서만 접근한다.
+# 로그는 컨테이너마다 10MB x 3개까지만 보관 (서버 디스크가 로그로 가득 차지 않게)
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
 services:
   mysql:
+    logging: *logging
     image: mysql:8.4
     restart: unless-stopped
     environment:
@@ -21,6 +29,7 @@ services:
       retries: 30
 
   python-server:
+    logging: *logging
     build: ./gazagopy
     restart: unless-stopped
     env_file: .env
@@ -34,6 +43,7 @@ services:
 
   # 축제 데이터: 시작할 때 한 번 + 매일 새벽 4시 TourAPI에서 갱신 (챗봇과 같은 이미지 사용)
   festival-collector:
+    logging: *logging
     build: ./gazagopy
     command: ["python", "collect_festivals.py", "--loop"]
     restart: unless-stopped
@@ -47,6 +57,7 @@ services:
         condition: service_healthy
 
   spring-server:
+    logging: *logging
     build: ./gazago
     restart: unless-stopped
     ports:
