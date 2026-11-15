@@ -1,8 +1,9 @@
-# AWS EC2 배포 (서울 리전, t3.small)
+# AWS EC2 배포 (t3.small)
 
 서버 1대에 MySQL·챗봇·축제 수집·Spring 4개 컨테이너가 함께 돌아가요. 앱은 `http://<퍼블릭 IP>:8080` 으로 접속해요.
 
-## 1. EC2 만들기 (AWS 콘솔, 오른쪽 위 리전 = 아시아 태평양(서울))
+## 1. EC2 만들기 (AWS 콘솔, 오른쪽 위 리전 = 내 프로젝트 리전)
+새 AWS 경험(소셜 로그인 가입) 계정은 **프로젝트 리전 한 곳에만** 리소스를 만들 수 있어요. 리전 확인: AWS Settings > View all projects > Overview > Additional Info > Region (이 프로젝트는 아시아 태평양(시드니) ap-southeast-2).
 1. EC2 → 인스턴스 시작
 2. 이름 `gajago-server`, AMI **Ubuntu Server 24.04 LTS**, 인스턴스 유형 **t3.small**
 3. 키 페어: 새로 만들기 → `gajago-key`, RSA, `.pem` → 다운로드한 파일을 안전한 곳에 보관 (다시 받을 수 없음)
