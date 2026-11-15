@@ -16,7 +16,7 @@
 
 ## 2. 노트북에서 비밀값 올리기 + 접속 (PowerShell)
 ```powershell
-cd "C:\Users\O2\Desktop\가자 go 클로드\gajaGo-server"
+cd gajaGo-server
 scp -i C:\경로\gajago-key.pem .env ubuntu@<퍼블릭IP>:~/.env
 scp -i C:\경로\gajago-key.pem deploy/setup-ec2.sh ubuntu@<퍼블릭IP>:~/
 ssh -i C:\경로\gajago-key.pem ubuntu@<퍼블릭IP>
