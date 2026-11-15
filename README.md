@@ -57,33 +57,38 @@ Gemini API / Tmap API
 - 데이터 수집 및 DB 저장
 - 조건별 조회 기능 제공
 
+## API 명세
+전체 엔드포인트와 처음 기획 대비 변경점: [docs/API.md](docs/API.md)
+
 ## 서버 실행 방법
+서버 1대에서 `docker compose` 로 4개 컨테이너가 함께 실행됩니다.
+
+| 서비스 | 역할 | 외부 포트 |
+| --- | --- | --- |
+| mysql | DB (처음 실행 시 `db/init` 의 테이블·음식 데이터 자동 입력) | 없음 |
+| python-server | 교통 챗봇 (Gemini + TMAP) | 없음 |
+| festival-collector | TourAPI 축제 수집 (시작 시 1회 + 매일 04:00) | 없음 |
+| spring-server | 앱이 호출하는 메인 API | 8080 |
+
 ### 사전 준비
-1. Docker Desktop : 각 OS(Windows/Mac/Linux)에 맞는 버전을 설치하고 실행
-2. Git : 소스 코드 클론을 위해 설치 되어 있어야 함
+- Docker (Desktop 또는 서버용 Docker Engine), Git
+- API 키: Gemini(Google AI Studio), TMAP(SK open API), TourAPI(data.go.kr 한국관광공사_국문 관광정보 서비스_GW)
 
 ### 실행
-1. 프로젝트 코드 가져오기
-터미널을 열고, 프로젝트를 저장할 폴더로 이동한 뒤 아래 명령어 입력
+```bash
 git clone https://github.com/Dankook-gajaGO/gajaGo-server.git
+cd gajaGo-server
+cp .env.example .env      # 값 채우기 (DB 비밀번호·JWT 키는 직접 생성: openssl rand -base64 48)
+docker compose up -d --build
+```
+- Swagger: `http://<서버 주소>:8080/swagger-ui.html`
+- 로그: `docker compose logs -f spring-server` / `docker compose logs festival-collector`
+- 종료: `docker compose down` (DB 데이터는 볼륨에 남음, 완전 삭제는 `docker compose down -v`)
 
-2. 환경변수 (.env) 설정
-프로젝트 루트 폴더(가장 상위 폴더)에 .env 파일을 생성하고, 서버 실행에 필요한 API키 및 데이터베이스 설정 정보를 입력
+### 데이터
+- 음식: `db/food_result.csv` + `db/make_food_seed.py` 의 알러지 매핑 → `python db/make_food_seed.py` 로 `db/init/02_food_seed.sql` 재생성
+- `db/init` 은 DB 볼륨이 처음 만들어질 때만 실행됨
 
-3. 서버 실행
-도커 데스크톱이 켜져 있는 상태에서, 터미널에 다음 명령어를 입력
-docker-compose up --build
-성공적으로 실행되면, 터미널에 스프링 부트 로고와 함께 Started... 로그가 출력됨
-
-4. "http://localhost:8080/swagger-ui.html"에 접속하면 API들 테스트 가능
-
-5. 실행 및 종료 방법
-Docker Desktop에서 종료 버튼 누르면 서버 종료됩니다.
-다음에 실행할 때 Docker Desktop에서 시작 버튼 눌러서 시작 가능하고 위의 방법에서 3번 으로 하셔도 됩니다.
-
-### 추가 사항
-#### 네트워크 및 보안 설정(API 연동 시 참고)
-- CORS 설정 : 현재 서버는 모든 출처에서의 요청을 허용 중
-- 안드로이드 앱에서 API 호출 시, localhost 대신 본인 컴퓨터의 사설 IP 주소를 사용해야 함
-- 노트북에서 명령 프롬프트(CMD)를 열고 ipconfig를 쳐서 나오는 IPv4주소(내 컴퓨터의 IP 주소)를 복사 → 앱 코드 내 API 주소를 http://[아까 나온 주소]:8080으로 수정하면 연결 가능
-- 연결 오류 시 노트북과 안드로이드 앱이 동일한 와이파이에 연결되었는지 확인 필요
+### 앱 연결
+- 앱(`gajaGO-web/eas.json`)의 `EXPO_PUBLIC_API_BASE_URL` 을 이 서버의 공개 주소로 설정한 뒤 APK를 빌드
+- 노트북 사설 IP(192.168.x.x)로 빌드한 APK는 같은 와이파이에서만 동작하므로 배포용으로 쓰지 말 것

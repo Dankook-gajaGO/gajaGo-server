@@ -1,20 +1,82 @@
-version: '3.8' # 도커 컴포즈 버전
-services:
-  # 스프링 서버 설정
-  spring-server:
-    build: ./gazago
-    ports:
-      - "8080:8080" # 외부에서 8080으로 접속 가능
-    env_file:
-      - .env
-    depends_on: [python-server]
-    environment:
-      - JWT_SECRET=${JWT_SECRET}
+# 서버 1대에서 MySQL + 챗봇(FastAPI) + Spring 을 함께 실행. 실행: docker compose up -d --build
+# 외부에는 Spring(8080)만 열고, MySQL·FastAPI는 내부 네트워크에서만 접근한다.
+# 로그는 컨테이너마다 10MB x 3개까지만 보관 (서버 디스크가 로그로 가득 차지 않게)
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
 
-  # 파이썬 서버 설정
+services:
+  mysql:
+    logging: *logging
+    image: mysql:8.4
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: ${DB_NAME}
+      MYSQL_USER: ${DB_USER}
+      MYSQL_PASSWORD: ${DB_PASSWORD}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      TZ: Asia/Seoul
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+    volumes:
+      - mysql-data:/var/lib/mysql
+      - ./db/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
   python-server:
+    logging: *logging
     build: ./gazagopy
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DB_HOST: mysql
+      DB_PORT: 3306
+      TZ: Asia/Seoul
+    depends_on:
+      mysql:
+        condition: service_healthy
+
+  # 축제 데이터: 시작할 때 한 번 + 매일 새벽 4시 TourAPI에서 갱신 (챗봇과 같은 이미지 사용)
+  festival-collector:
+    logging: *logging
+    build: ./gazagopy
+    command: ["python", "collect_festivals.py", "--loop"]
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DB_HOST: mysql
+      DB_PORT: 3306
+      TZ: Asia/Seoul
+    depends_on:
+      mysql:
+        condition: service_healthy
+
+  spring-server:
+    logging: *logging
+    build: ./gazago
+    restart: unless-stopped
     ports:
-      - "8000:8000" # 외부에서 8000으로 접속 가능
-    env_file:
-      - .env
+      - "8080:8080"
+    env_file: .env
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/${DB_NAME}?serverTimezone=Asia/Seoul&characterEncoding=UTF-8
+      SPRING_DATASOURCE_USERNAME: ${DB_USER}
+      SPRING_DATASOURCE_PASSWORD: ${DB_PASSWORD}
+      SPRING_JPA_HIBERNATE_DDL_AUTO: update
+      FASTAPI_URL: http://python-server:8000
+      # t3.small(메모리 2GB)에서 MySQL·챗봇과 같이 돌도록 JVM 힙 상한
+      JAVA_TOOL_OPTIONS: -Xmx512m
+      TZ: Asia/Seoul
+    depends_on:
+      mysql:
+        condition: service_healthy
+      python-server:
+        condition: service_started
+
+volumes:
+  mysql-data:

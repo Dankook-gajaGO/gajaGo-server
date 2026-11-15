@@ -19,6 +19,7 @@ import java.util.stream.Collectors;
 public class TmapClient {
     private static final String DEFAULT_ADDRESS = "주소 정보 없음";
 
+    // API 통신을 위한 WebClient 설정
     private final WebClient webClient = WebClient.builder()
             .baseUrl("https://apis.openapi.sk.com")
             .build();
@@ -26,6 +27,7 @@ public class TmapClient {
     @Value("${TMAP_KEY}")
     private String appKey;
 
+    // 키워드를 기반으로 장소를 검색
     public List<LocationCandidateResponse.LocationInfo> searchPois(String keyword) {
         TmapPoiResponse response = webClient.get()
                 .uri(uriBuilder -> uriBuilder
@@ -41,10 +43,11 @@ public class TmapClient {
 
         return readPois(response).stream()
                 .map(this::toLocationInfo)
-                .filter(Objects::nonNull)
+                .filter(Objects::nonNull) // 매핑 실패한 데이터 제외
                 .collect(Collectors.toList());
     }
 
+    // 특정 좌표(lat,lng) 반경 내의 시설 정보를 조회
     public List<FacilityNearbyResponse.FacilityInfo> searchNearbyFacilities(
             double lat,
             double lng,
@@ -82,6 +85,37 @@ public class TmapClient {
                 .collect(Collectors.toList());
     }
 
+    // Tmap 응답 내의 계층 구조를 안전하게 접근하여 POI 리스트 추출
+    // 업종 분류로는 안 잡히는 시설(환전소)용: 키워드 + 거리순 검색 후 이름에 키워드가 있는 곳만
+    public List<FacilityNearbyResponse.FacilityInfo> searchNearbyByKeyword(
+            String keyword, String label, double lat, double lng, int radius, int offset, int size
+    ) {
+        TmapPoiResponse response = webClient.get()
+                .uri(uriBuilder -> uriBuilder
+                        .path("/tmap/pois")
+                        .queryParam("version", 1)
+                        .queryParam("searchKeyword", keyword)
+                        .queryParam("centerLat", lat)
+                        .queryParam("centerLon", lng)
+                        .queryParam("radius", radius)
+                        .queryParam("searchtypCd", "R")
+                        .queryParam("page", (offset / size) + 1)
+                        .queryParam("count", size)
+                        .queryParam("reqCoordType", "WGS84GEO")
+                        .queryParam("resCoordType", "WGS84GEO")
+                        .queryParam("appKey", appKey)
+                        .build())
+                .retrieve()
+                .bodyToMono(TmapPoiResponse.class)
+                .block();
+
+        return readPois(response).stream()
+                .filter(poi -> poi.getName() != null && poi.getName().contains(keyword))
+                .map(poi -> toFacilityInfo(poi, lat, lng, List.of(label)))
+                .filter(Objects::nonNull)
+                .collect(Collectors.toList());
+    }
+
     private List<TmapPoiResponse.Poi> readPois(TmapPoiResponse response) {
         if (response == null || response.getSearchPoiInfo() == null
                 || response.getSearchPoiInfo().getPois() == null
@@ -91,6 +125,7 @@ public class TmapClient {
         return response.getSearchPoiInfo().getPois().getPoi();
     }
 
+    // 검색용 데이터로 매핑
     private LocationCandidateResponse.LocationInfo toLocationInfo(TmapPoiResponse.Poi poi) {
         Double poiLat = parseDouble(poi.getNoorLat());
         Double poiLng = parseDouble(poi.getNoorLon());
@@ -104,6 +139,7 @@ public class TmapClient {
         );
     }
 
+    // 시설 정보용 데이터로 매핑
     private FacilityNearbyResponse.FacilityInfo toFacilityInfo(
             TmapPoiResponse.Poi poi,
             double centerLat,
@@ -125,6 +161,7 @@ public class TmapClient {
                 .build();
     }
 
+    // 주소 데이터를 우선순위에 따라 통합(새주소 -> 도로명 -> 지번)
     private String readAddress(TmapPoiResponse.Poi poi) {
         String newAddress = readNewAddress(poi);
         if (!newAddress.isBlank()) return newAddress;
@@ -173,6 +210,7 @@ public class TmapClient {
         );
     }
 
+    // Tmap 카테고리명을 우리 서비스의 비즈니스 카테고리로 변환
     private String resolveCategory(TmapPoiResponse.Poi poi, List<String> requestedCategories) {
         String categoryText = String.join(" ",
                 safeText(poi.getUpperBizName(), ""),
@@ -181,6 +219,9 @@ public class TmapClient {
                 safeText(poi.getName(), "")
         ).toLowerCase(Locale.ROOT);
 
+        if (categoryText.contains("환전")) return "환전소";
+        if (categoryText.contains("약국")) return "약국";
+        if (categoryText.contains("역[") || categoryText.contains("지하철") || categoryText.contains("전철역")) return "지하철역";
         if (categoryText.contains("atm") || categoryText.contains("cd기")) return "ATM";
         if (categoryText.contains("화장실") || categoryText.contains("toilet")) return "화장실";
         if (categoryText.contains("편의점")
@@ -201,6 +242,7 @@ public class TmapClient {
         return "편의시설";
     }
 
+    // Tmap API가 주는 거리 정보가 없으면 직접 하버사인 공식으로 거리 계산
     private int resolveDistance(
             TmapPoiResponse.Poi poi,
             double centerLat,
@@ -213,6 +255,7 @@ public class TmapClient {
         return (int) Math.round(calculateDistanceMeters(centerLat, centerLng, poiLat, poiLng));
     }
 
+    // 두 지점 간의 거리를 계산하는 하버사인 공식
     private double calculateDistanceMeters(double lat1, double lng1, double lat2, double lng2) {
         double earthRadius = 6371000;
         double dLat = Math.toRadians(lat2 - lat1);
@@ -223,6 +266,7 @@ public class TmapClient {
         return earthRadius * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     }
 
+    // 데이터가 숫자가 아닐 경우를 대비한 안전한 변환
     private Double parseDouble(String value) {
         if (value == null || value.isBlank()) return null;
         try {

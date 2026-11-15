@@ -52,7 +52,7 @@ public class UserRequest {
                 .user(user)
                 .build();
 
-        user.addRequest(request);
+        if (user != null) user.addRequest(request); // 비회원 요청은 회원과 연결하지 않음
 
         return request;
     }
@@ -68,7 +68,7 @@ public class UserRequest {
     }
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name="user_id", nullable = false)
+    @JoinColumn(name="user_id") // 비회원 길찾기는 null
     private User user;
 
     public void setUser(User user) {

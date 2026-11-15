@@ -13,7 +13,7 @@ public class FestivalDetailResponse {
     private int contentId;
     private String title;
     private String addr;
-    private int zipCode;
+    private Integer zipCode;
     private LocalDate eventStartDate;
     private LocalDate eventEndDate;
     private String image;
@@ -21,4 +21,6 @@ public class FestivalDetailResponse {
     private String fee;
     private String eventHomepage;
     private String overview;
+    private Double lat;
+    private Double lng;
 }

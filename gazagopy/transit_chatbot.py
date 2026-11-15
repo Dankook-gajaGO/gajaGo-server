@@ -9,6 +9,7 @@ from google import genai
 from dotenv import load_dotenv
 import uvicorn 
 from datetime import datetime
+from urllib.parse import quote_plus
 
 # 환경 변수 로드 
 # GEMINI_API_KEY, TMAP_KEY, SQLALCHEMY_DATABASE_URL(DB연결) : .env 파일에 저장 필요
@@ -16,11 +17,29 @@ load_dotenv()
 
 app = FastAPI()
 
-# 클라이언트 설정 (gemini)
+# 클라이언트 설정 (gemini). 쉼표로 여러 모델을 적으면 앞 모델이 한도 초과(429)·혼잡(503)일 때 다음 모델로 재시도
+# 무료 사용량이 큰 Flash-Lite 모델을 먼저 사용
 client = genai.Client()
+GEMINI_MODELS = [m.strip() for m in os.getenv(
+    "GEMINI_MODELS", os.getenv("GEMINI_MODEL", "gemini-3.5-flash-lite,gemini-3.1-flash-lite,gemini-3.5-flash")
+).split(",") if m.strip()]
+
+
+def generate(prompt):
+    last_error = None
+    for model in GEMINI_MODELS:
+        try:
+            return client.models.generate_content(model=model, contents=prompt)
+        except Exception as e:  # 한도·혼잡이면 다음 모델, 그 외 오류는 바로 실패
+            last_error = e
+            if not any(code in str(e) for code in ("429", "503", "RESOURCE_EXHAUSTED", "UNAVAILABLE")):
+                raise
+            print(f"Gemini {model} 사용 불가, 다음 모델 시도: {str(e)[:80]}", flush=True)
+    raise last_error
 
 # DB 연결 
-DB_URL = f"mysql+pymysql://{os.getenv('DB_USER')}:{os.getenv('DB_PASSWORD')}@{os.getenv('DB_HOST')}:{os.getenv('DB_PORT')}/{os.getenv('DB_NAME')}"
+# 비밀번호에 # ! @ 같은 문자가 있어도 URL이 깨지지 않게 인코딩
+DB_URL = f"mysql+pymysql://{os.getenv('DB_USER')}:{quote_plus(os.getenv('DB_PASSWORD', ''))}@{os.getenv('DB_HOST')}:{os.getenv('DB_PORT', '3306')}/{os.getenv('DB_NAME')}?charset=utf8mb4"
 engine = create_engine(DB_URL) 
 
 class UserRequest(BaseModel):
@@ -34,7 +53,7 @@ def extract_userinput_info(user_input: str):
     당신은 교통 정보 추출 전문가입니다. 사용자의 문장에서 다음 정보를 추출하여 JSON 형식으로만 응답하세요.
     
     [추출 대상]
-    1. departure: 출발지 (명확한 장소명, 모르면 "unknown")
+    1. departure: 출발지 (명확한 장소명. "여기", "내 위치", "지금 있는 곳"처럼 현재 위치를 뜻하면 "현재 위치", 출발지를 말하지 않았으면 "unknown")
     2. destination: 목적지 (명확한 장소명, 모르면 "unknown")
     3. constraints: 주의사항 (짐, 인원, 환승, 선호 수단, 장애 여부, 교통 약자 등 특이사항을 요약하여 기록, 없으면 "none")
 
@@ -56,10 +75,7 @@ def extract_userinput_info(user_input: str):
 
     try:
         # gemini api 호출 
-        response = client.models.generate_content(
-            model = "gemini-2.5-flash",
-            contents = prompt
-        )
+        response = generate(prompt)
 
     
         raw_text = response.text.strip()
@@ -70,7 +86,8 @@ def extract_userinput_info(user_input: str):
         return json.loads(clean_json)
 
     except Exception as e:
-        return {"error": str(e), "status": "fail"}
+        print(f"Gemini 장소 추출 실패: {e}", flush=True)
+        return None
 
 
 # gemini로부터 3개의 경로에 대한 각각의 우선순위와 추천사유를 얻어 리턴 
@@ -114,16 +131,15 @@ def get_ai_recommendation(constraints: str, _3routes_summary: list):
     """
     try:
         # gemini 호출
-        response = client.models.generate_content(
-            model = "gemini-2.5-flash",
-            contents = prompt
-        )        
+        response = generate(prompt)        
         
         clean_json = response.text.replace("```json", "").replace("```", "").strip()
-        return json.loads(clean_json) 
+        result = json.loads(clean_json)
+        return result if isinstance(result, list) else None
     
     except Exception as e:
-        return {"error": str(e), "status": "fail"}
+        print(f"Gemini 추천 생성 실패: {e}", flush=True)
+        return None
 
 # tmap 대중교통 api에 사용자 입력에 대한 3개의 경로 요청
 def request_tmap_route(start_x, start_y, end_x, end_y):
@@ -150,16 +166,16 @@ def request_tmap_route(start_x, start_y, end_x, end_y):
     }
 
     try: 
-        response = requests.post(url, json=payload, headers=headers)
+        response = requests.post(url, json=payload, headers=headers, timeout=20)
         
         if response.status_code == 200:
             return response.json()
-        else:
-            print(f"에러 발생: {response.status_code}")
-            return None
+        print(f"TMAP 경로 요청 실패: {response.status_code}", flush=True)
+        return None
         
     except Exception as e:
-        return {"error": str(e), "status": "fail"}
+        print(f"TMAP 경로 요청 오류: {e}", flush=True)
+        return None
 
 
 
@@ -227,17 +243,88 @@ def extract_route_summary(request_result, request_id):
           
         return _3_routes 
 
-    except (KeyError, IndexError) as e:
-        return {"error": str(e), "status": "fail"}
+    except (KeyError, IndexError, TypeError) as e:
+        print(f"TMAP 경로 응답 해석 실패: {e}", flush=True)
+        return None
         
     
+
+# 카카오 대중교통 경로 (TMAP이 한도 초과·오류·경로 없음일 때 예비로 사용). KAKAO_REST_KEY 가 없으면 건너뜀
+def request_kakao_route(start_x, start_y, end_x, end_y):
+    kakao_key = os.getenv("KAKAO_REST_KEY")
+    if not kakao_key:
+        return None
+    try:
+        response = requests.get(
+            "https://dapi.kakao.com/v2/routing/publictraffic",
+            params={"start_x": start_x, "start_y": start_y, "end_x": end_x, "end_y": end_y},
+            headers={"Authorization": f"KakaoAK {kakao_key}"},
+            timeout=20,
+        )
+        if response.status_code == 200 and response.json().get("status") == "OK":
+            return response.json()
+        print(f"카카오 경로 요청 실패: {response.status_code} {response.text[:80]}", flush=True)
+        return None
+    except Exception as e:
+        print(f"카카오 경로 요청 오류: {e}", flush=True)
+        return None
+
+
+# 카카오 응답을 TMAP 요약과 같은 형식으로 변환 (앱·Spring은 그대로 사용)
+def extract_kakao_summary(request_result, request_id):
+    if not request_result:
+        return None
+    try:
+        routes = []
+        for route in request_result.get("routes", [])[:3]:
+            props = route["properties"]
+            # 카카오 응답에는 출발·도착 도보가 없고, 정류장 사이 도보(WALKING)만 가끔 옴
+            # -> 출발·도착 도보 단계를 채우고, 도보 거리는 전체 거리에서 버스·지하철 구간을 뺀 값
+            legs = [step["properties"] for step in route.get("steps", [])]
+            detail_list, prev_end = [], None
+            for sp in legs:
+                stops = sp.get("stops", [])
+                start_name = stops[0]["name"] if stops else ""
+                end_name = stops[-1]["name"] if stops else ""
+                minutes = max(1, sp.get("time", 0) // 60)
+                if prev_end is None:
+                    detail_list.append(f"{len(detail_list) + 1}. 도보: 출발지에서 '{start_name}'까지 이동")
+                if sp.get("type") == "WALKING":
+                    detail_list.append(f"{len(detail_list) + 1}. 도보: '{start_name}'에서 '{end_name}'까지 약 {minutes}분 이동 ({sp.get('distance', 0)}m)")
+                else:
+                    if prev_end is not None and prev_end != start_name:
+                        detail_list.append(f"{len(detail_list) + 1}. 도보: '{prev_end}'에서 '{start_name}'(으)로 환승 이동")
+                    route_name = "/".join(dict.fromkeys(v.get("name", "") for v in sp.get("vehicles", []))) or "대중교통"
+                    detail_list.append(
+                        f"{len(detail_list) + 1}. {sp.get('type')}: '{route_name}' 탑승 ('{start_name}' 승차) -> "
+                        f"'{end_name}'까지 {max(len(stops) - 1, 0)}개 정류장 이동 (약 {minutes}분)"
+                    )
+                prev_end = end_name
+            if prev_end is not None:
+                detail_list.append(f"{len(detail_list) + 1}. 도보: '{prev_end}'에서 도착지까지 이동")
+            riding = sum(sp.get("distance", 0) for sp in legs if sp.get("type") != "WALKING")
+            fare = props.get("fare", {})
+            routes.append({
+                "request_id": request_id,
+                "travel_time": props.get("totalTime", 0) // 60,
+                "transfers": props.get("transfers", 0),
+                "walking_distance": max(0, props.get("totalDistance", 0) - riding),
+                "fare": fare.get("value") or fare.get("min", 0),  # 요금이 범위(min~max)로 오면 최소 요금
+                "detail": "\n".join(detail_list),
+            })
+        return routes or None
+    except (KeyError, IndexError, TypeError) as e:
+        print(f"카카오 경로 응답 해석 실패: {e}", flush=True)
+        return None
+
 
 @app.post("/api/v1/extract-userinput")  # 자바 서버에서 호출할 엔드포인트: 사용자 입력에서 정보를 추출하여 JSON으로 리턴
 def get_info(request: UserRequest):
     result = extract_userinput_info(request.user_input)
 
-    if not result:
-        raise HTTPException(status_code=500, detail="오류 발생")
+    # Gemini 호출/JSON 파싱 실패를 200으로 돌려주면 Spring 이 빈 장소로 진행함 -> 오류 코드로 알림
+    if not isinstance(result, dict):
+        raise HTTPException(status_code=502, detail="AI 분석 실패")
 
     return result
 
@@ -251,30 +338,28 @@ def generate_route_recommendations(request_id: int):
         if not result:
             raise HTTPException(status_code = 404, detail = "request_id를 찾을 수 없습니다.")
 
-    raw_result = request_tmap_route(result.departure_lon, result.departure_lat, result.destination_lon, result.destination_lat) ### 여기도 
-    summaries = extract_route_summary(raw_result, request_id)
+    coords = (result.departure_lon, result.departure_lat, result.destination_lon, result.destination_lat)
+    summaries = extract_route_summary(request_tmap_route(*coords), request_id)
+    if not summaries:  # TMAP 한도 초과·오류·경로 없음 -> 카카오로 한 번 더
+        summaries = extract_kakao_summary(request_kakao_route(*coords), request_id)
 
     if not summaries:
-        print(f"DEBUG: Tmap 응답이 비어있음. raw_result: {raw_result}")
+        print(f"경로 없음 - TMAP·카카오 모두 실패 (request_id={request_id})", flush=True)
         return {"status": "fail", "message": "경로를 찾지 못했습니다."}
     
     # gemini로부터 각 3개의 경로에 대한 추천사유와 우선순위를 가져옴
-    ai_recommendations = get_ai_recommendation(result.user_constraints, summaries)
-    
-    if isinstance(ai_recommendations, dict) and ai_recommendations.get("status") == "fail":
-        print("Gemini API 호출 실패")
-        ai_recommendations = []
+    # 추천 생성에 실패해도 경로는 기본 순서·기본 사유로 저장
+    ai_recommendations = get_ai_recommendation(result.user_constraints, summaries) or []
 
 
     
     # 모든 결과(총 소요시간, 총 환승횟수, 도보 거리, 총 요금, 추천사유, 우선순위, 세부경로)를 DB에 저장
-    with engine.begin() as conn:  
+    with engine.begin() as conn:
+        # 같은 요청에서 장소를 다시 고르면 다시 호출됨 -> 이전 경로를 지워야 새 경로 3개만 보임
+        conn.execute(text("DELETE FROM route_summary WHERE request_id = :rid"), {"rid": request_id})
         for i, s in enumerate(summaries):
             
-            recommendation = next((item for item in ai_recommendations if item.get('path_id') == i+1), None)
-            
-            if recommendation is None:
-                recommendation = {}
+            recommendation = next((item for item in ai_recommendations if isinstance(item, dict) and item.get('path_id') == i+1), {})
             
             raw_rank = recommendation.get('rank')
             if str(raw_rank).isdigit():

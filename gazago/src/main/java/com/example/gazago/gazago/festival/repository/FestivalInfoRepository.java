@@ -7,7 +7,7 @@ import java.time.LocalDate;
 import java.util.List;
 
 public interface FestivalInfoRepository extends JpaRepository<FestivalInfo, Integer> {
-    // startdate가 [now]와 [targetDate] 사이인 데이터를 조회
-    List<FestivalInfo> findByEventStartDateBetween(LocalDate start, LocalDate end);
+    // [targetDate] 이전에 시작하고 [now] 이후에 끝나는 축제 = 진행 중 + N달 안에 시작
+    List<FestivalInfo> findByEventStartDateLessThanEqualAndEventEndDateGreaterThanEqual(LocalDate targetDate, LocalDate now);
 
 }

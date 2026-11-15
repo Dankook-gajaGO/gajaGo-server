@@ -30,12 +30,24 @@ public class SecurityConfig {
                 .csrf(csrf -> csrf.disable())
                 .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
+                                //.anyRequest().permitAll()
+
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .requestMatchers("/api/member/signup", "/api/member/login").permitAll()
                         .requestMatchers("/api/festival/festivalDetail", "/api/festival/festivalList").permitAll()
                         .requestMatchers("/api/facilities/**").permitAll()
+                        .requestMatchers("/api/food/**").permitAll() // 음식 알러지 필터는 비회원도 사용
+                        .requestMatchers(HttpMethod.GET, "/api/exchange-rates").permitAll() // 가계부 환율
+                        // 길찾기는 비회원도 사용. 기록(/api/transport/history)은 회원만
+                        .requestMatchers(HttpMethod.POST, "/api/transport/InitialRequest", "/api/transport/routes").permitAll()
+                        // 관리자: JWT 대신 AdminController 가 ADMIN_PASSWORD 로 직접 확인
+                        .requestMatchers("/admin.html", "/api/admin/**").permitAll()
                         .requestMatchers("/swagger-ui/**", "/v3/api-docs/**", "/swagger-ui.html").permitAll()
+                        // 서버 오류가 인증 실패(403)로 가려지지 않게 오류 페이지는 공개
+                        .requestMatchers("/error").permitAll()
                         .anyRequest().authenticated()
+
+
                 )
                 .addFilterBefore(new JwtAuthenticationFilter(jwtTokenProvider),
                         org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter.class);

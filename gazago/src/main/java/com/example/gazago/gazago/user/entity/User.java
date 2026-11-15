@@ -31,6 +31,9 @@ public class User {
     private String nickname; //닉네임
     private String email; //이메일
 
+    @Column(name = "allergies")
+    private String allergies; // 저장한 알러지 (쉼표로 구분, 예: "갑각류,견과류")
+
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;

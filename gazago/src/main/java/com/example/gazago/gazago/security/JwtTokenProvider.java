@@ -3,6 +3,7 @@ package com.example.gazago.gazago.security;
 import io.jsonwebtoken.*;
 import io.jsonwebtoken.security.Keys;
 import jakarta.annotation.PostConstruct;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
@@ -11,13 +12,15 @@ import java.util.Base64;
 import java.util.Date;
 
 @Component
+@Slf4j
 public class JwtTokenProvider {
 
     @Value("${jwt.secret}")
     private String secretKey;
 
     private Key key;
-    private final long tokenValidTime = 30 * 60 * 1000L; // 30분
+    // 리프레시 토큰 없이 7일 유지
+    private final long tokenValidTime = 7 * 24 * 60 * 60 * 1000L; // 7일
 
     @PostConstruct
     protected void init() {
@@ -49,7 +52,7 @@ public class JwtTokenProvider {
             Jws<Claims> claims = Jwts.parserBuilder().setSigningKey(key).build().parseClaimsJws(jwtToken);
             return !claims.getBody().getExpiration().before(new Date());
         } catch (JwtException | IllegalArgumentException e) {
-            e.printStackTrace();
+            log.debug("유효하지 않은 토큰: {}", e.getMessage()); // 만료 토큰은 흔한 상황이라 debug 레벨
             return false;
         }
     }

@@ -6,10 +6,16 @@ import com.example.gazago.gazago.user.dto.SignupRequestDto;
 import com.example.gazago.gazago.user.service.MemberService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+
+import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/member")
@@ -29,5 +35,17 @@ public class MemberController {
     public ResponseEntity<String> login(@RequestBody LoginRequestDto loginDto) {
         String token = memberService.login(loginDto);
         return ResponseEntity.ok(token); // 발급된 토큰 반환
+    }
+
+    // 내 알러지 (회원 전용): 음식 화면에서 필터를 불러오고 저장
+    @GetMapping("/allergies")
+    public Map<String, List<String>> getAllergies(@AuthenticationPrincipal String loginId) {
+        return Map.of("allergies", memberService.getAllergies(loginId));
+    }
+
+    @PutMapping("/allergies")
+    public Map<String, List<String>> saveAllergies(@RequestBody Map<String, List<String>> body,
+                                                   @AuthenticationPrincipal String loginId) {
+        return Map.of("allergies", memberService.saveAllergies(loginId, body.get("allergies")));
     }
 }
