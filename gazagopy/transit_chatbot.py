@@ -18,8 +18,7 @@ load_dotenv()
 app = FastAPI()
 
 # 클라이언트 설정 (gemini). 쉼표로 여러 모델을 적으면 앞 모델이 한도 초과(429)·혼잡(503)일 때 다음 모델로 재시도
-# 무료 한도: Flash-Lite 하루 약 500회, Flash 약 20회 -> Lite를 먼저 (출발지·목적지 추출엔 Lite로 충분)
-# shortcut: 무료 한도 합계 하루 약 1,000회, 실사용자가 늘면 Google AI Studio 결제 연결
+# 무료 사용량이 큰 Flash-Lite 모델을 먼저 사용
 client = genai.Client()
 GEMINI_MODELS = [m.strip() for m in os.getenv(
     "GEMINI_MODELS", os.getenv("GEMINI_MODEL", "gemini-3.5-flash-lite,gemini-3.1-flash-lite,gemini-3.5-flash")
@@ -87,7 +86,8 @@ def extract_userinput_info(user_input: str):
         return json.loads(clean_json)
 
     except Exception as e:
-        return {"error": str(e), "status": "fail"}
+        print(f"Gemini 장소 추출 실패: {e}", flush=True)
+        return None
 
 
 # gemini로부터 3개의 경로에 대한 각각의 우선순위와 추천사유를 얻어 리턴 
@@ -134,10 +134,12 @@ def get_ai_recommendation(constraints: str, _3routes_summary: list):
         response = generate(prompt)        
         
         clean_json = response.text.replace("```json", "").replace("```", "").strip()
-        return json.loads(clean_json) 
+        result = json.loads(clean_json)
+        return result if isinstance(result, list) else None
     
     except Exception as e:
-        return {"error": str(e), "status": "fail"}
+        print(f"Gemini 추천 생성 실패: {e}", flush=True)
+        return None
 
 # tmap 대중교통 api에 사용자 입력에 대한 3개의 경로 요청
 def request_tmap_route(start_x, start_y, end_x, end_y):
@@ -168,12 +170,12 @@ def request_tmap_route(start_x, start_y, end_x, end_y):
         
         if response.status_code == 200:
             return response.json()
-        else:
-            print(f"TMAP 경로 요청 실패: {response.status_code}", flush=True)
-            return None
+        print(f"TMAP 경로 요청 실패: {response.status_code}", flush=True)
+        return None
         
     except Exception as e:
-        return {"error": str(e), "status": "fail"}
+        print(f"TMAP 경로 요청 오류: {e}", flush=True)
+        return None
 
 
 
@@ -241,8 +243,9 @@ def extract_route_summary(request_result, request_id):
           
         return _3_routes 
 
-    except (KeyError, IndexError) as e:
-        return {"error": str(e), "status": "fail"}
+    except (KeyError, IndexError, TypeError) as e:
+        print(f"TMAP 경로 응답 해석 실패: {e}", flush=True)
+        return None
         
     
 
@@ -251,8 +254,7 @@ def get_info(request: UserRequest):
     result = extract_userinput_info(request.user_input)
 
     # Gemini 호출/JSON 파싱 실패를 200으로 돌려주면 Spring 이 빈 장소로 진행함 -> 오류 코드로 알림
-    if not result or result.get("status") == "fail":
-        print(f"Gemini 추출 실패: {result}", flush=True)
+    if not isinstance(result, dict):
         raise HTTPException(status_code=502, detail="AI 분석 실패")
 
     return result
@@ -267,7 +269,7 @@ def generate_route_recommendations(request_id: int):
         if not result:
             raise HTTPException(status_code = 404, detail = "request_id를 찾을 수 없습니다.")
 
-    raw_result = request_tmap_route(result.departure_lon, result.departure_lat, result.destination_lon, result.destination_lat) ### 여기도 
+    raw_result = request_tmap_route(result.departure_lon, result.departure_lat, result.destination_lon, result.destination_lat)
     summaries = extract_route_summary(raw_result, request_id)
 
     if not summaries:
@@ -275,11 +277,8 @@ def generate_route_recommendations(request_id: int):
         return {"status": "fail", "message": "경로를 찾지 못했습니다."}
     
     # gemini로부터 각 3개의 경로에 대한 추천사유와 우선순위를 가져옴
-    ai_recommendations = get_ai_recommendation(result.user_constraints, summaries)
-    
-    if isinstance(ai_recommendations, dict) and ai_recommendations.get("status") == "fail":
-        print("Gemini API 호출 실패")
-        ai_recommendations = []
+    # 추천 생성에 실패해도 경로는 기본 순서·기본 사유로 저장
+    ai_recommendations = get_ai_recommendation(result.user_constraints, summaries) or []
 
 
     
@@ -289,10 +288,7 @@ def generate_route_recommendations(request_id: int):
         conn.execute(text("DELETE FROM route_summary WHERE request_id = :rid"), {"rid": request_id})
         for i, s in enumerate(summaries):
             
-            recommendation = next((item for item in ai_recommendations if item.get('path_id') == i+1), None)
-            
-            if recommendation is None:
-                recommendation = {}
+            recommendation = next((item for item in ai_recommendations if isinstance(item, dict) and item.get('path_id') == i+1), {})
             
             raw_rank = recommendation.get('rank')
             if str(raw_rank).isdigit():

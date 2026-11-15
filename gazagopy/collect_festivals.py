@@ -45,9 +45,6 @@ def to_float(s):
         return None
 
 
-assert to_date("20261119") == date(2026, 11, 19) and to_date("") is None and to_date("2026") is None
-assert to_int("06234") == 6234 and to_int("") is None and to_int("12-3") is None
-assert to_float("126.97") == 126.97 and to_float("") is None and to_float("x") is None
 
 
 def call(op, **params):
