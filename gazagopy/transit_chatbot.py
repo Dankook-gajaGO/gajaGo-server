@@ -18,10 +18,11 @@ load_dotenv()
 app = FastAPI()
 
 # 클라이언트 설정 (gemini). 쉼표로 여러 모델을 적으면 앞 모델이 한도 초과(429)·혼잡(503)일 때 다음 모델로 재시도
-# shortcut: 무료 한도는 모델별 하루 20회 수준 -> 실사용자가 늘면 Google AI Studio 결제 연결
+# 무료 한도: Flash-Lite 하루 약 500회, Flash 약 20회 -> Lite를 먼저 (출발지·목적지 추출엔 Lite로 충분)
+# shortcut: 무료 한도 합계 하루 약 1,000회, 실사용자가 늘면 Google AI Studio 결제 연결
 client = genai.Client()
 GEMINI_MODELS = [m.strip() for m in os.getenv(
-    "GEMINI_MODELS", os.getenv("GEMINI_MODEL", "gemini-3.5-flash,gemini-3.5-flash-lite,gemini-3.1-flash-lite")
+    "GEMINI_MODELS", os.getenv("GEMINI_MODEL", "gemini-3.5-flash-lite,gemini-3.1-flash-lite,gemini-3.5-flash")
 ).split(",") if m.strip()]
 
 
@@ -168,7 +169,7 @@ def request_tmap_route(start_x, start_y, end_x, end_y):
         if response.status_code == 200:
             return response.json()
         else:
-            print(f"에러 발생: {response.status_code}")
+            print(f"TMAP 경로 요청 실패: {response.status_code}", flush=True)
             return None
         
     except Exception as e:
@@ -270,7 +271,7 @@ def generate_route_recommendations(request_id: int):
     summaries = extract_route_summary(raw_result, request_id)
 
     if not summaries:
-        print(f"DEBUG: Tmap 응답이 비어있음. raw_result: {raw_result}")
+        print(f"TMAP 경로 없음 (request_id={request_id})", flush=True)
         return {"status": "fail", "message": "경로를 찾지 못했습니다."}
     
     # gemini로부터 각 3개의 경로에 대한 추천사유와 우선순위를 가져옴

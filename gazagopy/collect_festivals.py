@@ -24,8 +24,9 @@ VALUES (:contentid, :title, :addr1, :zipcode, :eventstartdate, :eventenddate,
         :image, :tel, :fee, :eventhomepage, :overview, :lat, :lng)
 ON DUPLICATE KEY UPDATE title=VALUES(title), addr1=VALUES(addr1), zipcode=VALUES(zipcode),
   eventstartdate=VALUES(eventstartdate), eventenddate=VALUES(eventenddate), image=VALUES(image),
-  tel=VALUES(tel), fee=VALUES(fee), eventhomepage=VALUES(eventhomepage), overview=VALUES(overview),
-  lat=VALUES(lat), lng=VALUES(lng)
+  tel=VALUES(tel), fee=COALESCE(VALUES(fee), fee),
+  eventhomepage=COALESCE(VALUES(eventhomepage), eventhomepage),
+  overview=COALESCE(VALUES(overview), overview), lat=VALUES(lat), lng=VALUES(lng)
 """)
 
 
@@ -76,11 +77,19 @@ def collect():
             break
         page += 1
 
-    rows = []
+    # 상세(소개·요금·홈페이지)는 처음 보는 행사만 요청: 재시작·매일 갱신 때 TourAPI 호출을 목록 몇 번으로 줄임
+    with engine.connect() as conn:
+        known = {r[0] for r in conn.execute(text("SELECT contentid FROM festival_info WHERE overview IS NOT NULL"))}
+
+    rows, fetched = [], 0
     for f in festivals:
         cid = f["contentid"]
-        common = first("detailCommon2", contentId=cid)
-        intro = first("detailIntro2", contentId=cid, contentTypeId=f.get("contenttypeid", "15"))
+        if int(cid) in known:
+            common, intro = {}, {}
+        else:
+            common = first("detailCommon2", contentId=cid)
+            intro = first("detailIntro2", contentId=cid, contentTypeId=f.get("contenttypeid", "15"))
+            fetched += 1
         rows.append({
             "contentid": int(cid),
             "title": f.get("title"),
@@ -100,7 +109,7 @@ def collect():
     if rows:
         with engine.begin() as conn:
             conn.execute(UPSERT, rows)
-    print(f"[festival] {datetime.now():%Y-%m-%d %H:%M} 저장 {len(rows)}건", flush=True)
+    print(f"[festival] {datetime.now():%Y-%m-%d %H:%M} 저장 {len(rows)}건 (새 행사 상세 요청 {fetched}건)", flush=True)
 
 
 def seconds_until_next_run():
