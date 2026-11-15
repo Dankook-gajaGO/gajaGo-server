@@ -4,7 +4,7 @@
 # 미리 할 일: 노트북에서 .env 를 서버 홈(~/.env)으로 올려 두기 (deploy/README.md 참고)
 set -euo pipefail
 
-BRANCH="${BRANCH:-feature/always-on-deploy}"
+BRANCH="${BRANCH:-main}"
 REPO="https://github.com/Dankook-gajaGO/gajaGo-server.git"
 DIR="$HOME/gajaGo-server"
 
