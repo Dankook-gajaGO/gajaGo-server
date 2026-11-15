@@ -126,11 +126,15 @@ engine = create_engine(
 )
 
 if __name__ == "__main__":
+    failures = 0
     while True:
         try:
             collect()
+            failures = 0
         except Exception as e:
-            print(f"[festival] 수집 실패, 다음 실행 때 다시 시도: {e}", flush=True)
+            failures += 1
+            print(f"[festival] 수집 실패 ({failures}회): {e}", flush=True)
         if "--loop" not in sys.argv:
             break
-        time.sleep(seconds_until_next_run())
+        # 첫 부팅 땐 MySQL이 healthy 후에도 잠깐 재시작해 연결이 실패함 → 10분 뒤 재시도 (3번까지, API 한도 아끼기)
+        time.sleep(600 if 0 < failures <= 3 else seconds_until_next_run())
