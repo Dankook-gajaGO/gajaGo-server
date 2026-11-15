@@ -249,6 +249,66 @@ def extract_route_summary(request_result, request_id):
         
     
 
+# 카카오 대중교통 경로 (TMAP이 한도 초과·오류·경로 없음일 때 예비로 사용). KAKAO_REST_KEY 가 없으면 건너뜀
+def request_kakao_route(start_x, start_y, end_x, end_y):
+    kakao_key = os.getenv("KAKAO_REST_KEY")
+    if not kakao_key:
+        return None
+    try:
+        response = requests.get(
+            "https://dapi.kakao.com/v2/routing/publictraffic",
+            params={"start_x": start_x, "start_y": start_y, "end_x": end_x, "end_y": end_y},
+            headers={"Authorization": f"KakaoAK {kakao_key}"},
+            timeout=20,
+        )
+        if response.status_code == 200 and response.json().get("status") == "OK":
+            return response.json()
+        print(f"카카오 경로 요청 실패: {response.status_code} {response.text[:80]}", flush=True)
+        return None
+    except Exception as e:
+        print(f"카카오 경로 요청 오류: {e}", flush=True)
+        return None
+
+
+# 카카오 응답을 TMAP 요약과 같은 형식으로 변환 (앱·Spring은 그대로 사용)
+def extract_kakao_summary(request_result, request_id):
+    if not request_result:
+        return None
+    try:
+        routes = []
+        for route in request_result.get("routes", [])[:3]:
+            props = route["properties"]
+            detail_list, walking_distance = [], 0
+            for step in route.get("steps", []):
+                sp = step["properties"]
+                minutes = max(1, sp.get("time", 0) // 60)
+                n = len(detail_list) + 1
+                if sp.get("type") == "WALKING":
+                    walking_distance += sp.get("distance", 0)
+                    detail_list.append(f"{n}. 도보: {sp.get('guidance', '걷기')} (약 {minutes}분, {sp.get('distance', 0)}m)")
+                else:
+                    stops = sp.get("stops", [])
+                    route_name = "/".join(v.get("name", "") for v in sp.get("vehicles", [])) or "대중교통"
+                    start_name = stops[0]["name"] if stops else ""
+                    end_name = stops[-1]["name"] if stops else ""
+                    detail_list.append(
+                        f"{n}. {sp.get('type')}: '{route_name}' 탑승 ('{start_name}' 승차) -> "
+                        f"'{end_name}'까지 {max(len(stops) - 1, 0)}개 정류장 이동 (약 {minutes}분)"
+                    )
+            routes.append({
+                "request_id": request_id,
+                "travel_time": props.get("totalTime", 0) // 60,
+                "transfers": props.get("transfers", 0),
+                "walking_distance": walking_distance,
+                "fare": props.get("fare", {}).get("value", 0),
+                "detail": "\n".join(detail_list),
+            })
+        return routes or None
+    except (KeyError, IndexError, TypeError) as e:
+        print(f"카카오 경로 응답 해석 실패: {e}", flush=True)
+        return None
+
+
 @app.post("/api/v1/extract-userinput")  # 자바 서버에서 호출할 엔드포인트: 사용자 입력에서 정보를 추출하여 JSON으로 리턴
 def get_info(request: UserRequest):
     result = extract_userinput_info(request.user_input)
@@ -269,11 +329,13 @@ def generate_route_recommendations(request_id: int):
         if not result:
             raise HTTPException(status_code = 404, detail = "request_id를 찾을 수 없습니다.")
 
-    raw_result = request_tmap_route(result.departure_lon, result.departure_lat, result.destination_lon, result.destination_lat)
-    summaries = extract_route_summary(raw_result, request_id)
+    coords = (result.departure_lon, result.departure_lat, result.destination_lon, result.destination_lat)
+    summaries = extract_route_summary(request_tmap_route(*coords), request_id)
+    if not summaries:  # TMAP 한도 초과·오류·경로 없음 -> 카카오로 한 번 더
+        summaries = extract_kakao_summary(request_kakao_route(*coords), request_id)
 
     if not summaries:
-        print(f"TMAP 경로 없음 (request_id={request_id})", flush=True)
+        print(f"경로 없음 - TMAP·카카오 모두 실패 (request_id={request_id})", flush=True)
         return {"status": "fail", "message": "경로를 찾지 못했습니다."}
     
     # gemini로부터 각 3개의 경로에 대한 추천사유와 우선순위를 가져옴
