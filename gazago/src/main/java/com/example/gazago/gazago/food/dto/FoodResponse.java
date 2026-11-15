@@ -28,10 +28,8 @@ public class FoodResponse {
     public static class FoodItemDto {
         private Long foodId;
         private String foodName;
-        private String foodNm;
         private String category;
         private List<String> ingredients;
-        private String ingredientNm;
     }
 
     public static FoodResponse from(List<FoodInfo> foodInfoList) {
@@ -59,10 +57,8 @@ public class FoodResponse {
         return new FoodItemDto(
                 food.getFoodId(),
                 food.getFoodNm(),
-                food.getFoodNm(),
                 normalizeCategory(food.getTyNm()),
-                ingredients,
-                String.join(", ", ingredients)
+                ingredients
         );
     }
 

@@ -47,7 +47,7 @@ for r in rows:
             ingredients.append(f"({int(r['food_id'])},{q(name)})")
 mapping = [f"({q(cat)},{q(name)})" for cat, names in ALLERGY.items() for name in names]
 
-# self-check: CSV 음식 99개, 모든 알러지 항목이 최소 1개 음식을 실제로 걸러야 함 (메밀처럼 아무것도 안 걸러지는 필터 방지)
+# 데이터 검증: 음식 99개, 모든 알러지 항목이 적어도 한 음식은 걸러내야 함 (매핑 누락 방지)
 assert len(foods) == 99, len(foods)
 all_ingredients = {x.strip() for r in rows for x in r["ingredient_nm"].split(",")}
 dead = [cat for cat, names in ALLERGY.items() if not all_ingredients & set(names)]

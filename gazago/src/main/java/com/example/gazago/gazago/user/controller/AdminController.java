@@ -13,7 +13,7 @@ import java.util.List;
 import java.util.Map;
 
 // 관리자 웹 페이지(/admin.html)용 회원 조회·삭제. JWT 대신 .env 의 ADMIN_PASSWORD 를 X-Admin-Password 헤더로 확인
-// shortcut: 비밀번호 시도 횟수 제한 없음, 공개 서비스로 키우면 로그인 제한·HTTPS 추가
+// 관리자 비밀번호 시도 횟수 제한은 없음
 @RestController
 @RequestMapping("/api/admin")
 public class AdminController {
