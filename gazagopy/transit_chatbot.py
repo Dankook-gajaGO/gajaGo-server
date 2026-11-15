@@ -357,19 +357,17 @@ def generate_route_recommendations(request_id: int):
     with engine.begin() as conn:
         # 같은 요청에서 장소를 다시 고르면 다시 호출됨 -> 이전 경로를 지워야 새 경로 3개만 보임
         conn.execute(text("DELETE FROM route_summary WHERE request_id = :rid"), {"rid": request_id})
+        recs = [next((item for item in ai_recommendations if isinstance(item, dict) and item.get('path_id') == i+1), {})
+                for i in range(len(summaries))]
+        ai_ranks = [int(r['rank']) if str(r.get('rank')).isdigit() else None for r in recs]
+        # 순위가 1..N을 한 번씩 쓰지 않으면(중복·범위 밖·누락) AI 순위를 버리고 기본 순서 사용
+        use_ai_rank = sorted(r for r in ai_ranks if r is not None) == list(range(1, len(summaries) + 1))
         for i, s in enumerate(summaries):
-            
-            recommendation = next((item for item in ai_recommendations if isinstance(item, dict) and item.get('path_id') == i+1), {})
-            
-            raw_rank = recommendation.get('rank')
-            if str(raw_rank).isdigit():
-               rank = int(raw_rank)
-            else:
-                rank = i + 1  
+            rank = ai_ranks[i] if use_ai_rank else i + 1
 
-            reason = recommendation.get('reason')
+            reason = recs[i].get('reason')
             if not reason or reason == 'unknown':
-                reason = "여러 기준을 종합적으로 반영한 추천 경로입니다."
+                reason = "AI 추천을 받지 못해 기본 순서로 보여 주는 경로입니다."
 
             insert_query = text("""
                 INSERT INTO route_summary (request_id, travel_time, transfers, walking_distance, fare, detail, `rank`, `reason`)
