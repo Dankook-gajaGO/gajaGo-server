@@ -6,16 +6,12 @@
 ### 기능
 - 알러지 정보를 고려한 음식 추천
 - AI 기반 교통 경로 추천
-- 축제 및 행사 정보 제공
+- 축제 및 행사 정보 제공 (매일 자동 수집)
+- 일정·캘린더, 여행 가계부(환율·N빵), 주변 편의시설
 
 ## 시스템 아키텍처
-React Native
-↓
-Spring Boot
-↓
-FastAPI
-↓
-Gemini API / Tmap API
+
+![가자GO 시스템 아키텍처](docs/architecture.webp)
 
 ## 기술 스택
 
@@ -33,8 +29,8 @@ Gemini API / Tmap API
 - React Native
 
 ### Infra
-- Docker
-- Docker Compose
+- Docker, Docker Compose
+- AWS EC2 (배포 방법: [deploy/README.md](deploy/README.md))
 
 ## 주요 기능
 
@@ -42,7 +38,7 @@ Gemini API / Tmap API
 
 - Gemini를 활용한 출발지/목적지 추출
 - Tmap POI API를 통한 위치 검증
-- Tmap 대중교통 API 기반 경로 탐색
+- Tmap 대중교통 API 기반 경로 탐색 (실패하면 카카오 대중교통 경로로 다시 검색)
 - 사용자 상황을 고려한 경로 추천
 
 ### 알러지 음식 필터링
@@ -54,7 +50,7 @@ Gemini API / Tmap API
 ### 축제/행사 정보
 
 - 한국관광공사 API 활용
-- 데이터 수집 및 DB 저장
+- 시작 시 1회 + 매일 04:00 자동 수집, 새 행사만 상세 정보 요청
 - 조건별 조회 기능 제공
 
 ## API 명세
